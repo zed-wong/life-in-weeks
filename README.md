@@ -1,27 +1,29 @@
 # Life Progress
 
-A modern, elegant web application that visualizes your life journey in weeks. Built with SvelteKit and designed to be a Progressive Web App (PWA), Life Progress helps you gain perspective on your life's timeline and encourages mindful living.
+A contemplative web application that visualizes your life journey as a grid of weeks. Built with SvelteKit as a Progressive Web App, Life Progress helps you gain perspective on your timeline and mark the moments that shaped it.
 
 ![Life Progress Screenshot](public/screenshot.png)
 
 ## Features
 
-- **Life Visualization**: See your life journey represented as a grid of weeks, with each week as a dot
+- **Life Visualization**: See your life as a grid of weeks — each dot is one week, colored by era
+- **Event Marking**: Add events, milestones, and turning points to any week
 - **Progress Tracking**: View your life progress as a percentage and in weeks
-- **Responsive Design**: Beautiful, responsive interface that works on all devices
+- **Export & Import**: Back up and restore your data as JSON
+- **Responsive Design**: Works beautifully on all devices
 - **PWA Support**: Install as a Progressive Web App for offline access
-- **Data Persistence**: Your data is saved locally and persists between sessions
-- **Modern UI**: Clean, modern interface with smooth animations and transitions
-- **Accessibility**: Built with accessibility in mind
-- **Dark Mode**: Beautiful dark theme that's easy on the eyes
+- **Data Persistence**: Everything is saved locally in the browser
+- **Dark Mode**: A warm walnut-ink dark theme, not neon
+- **Accessibility**: Built with keyboard navigation and screen readers in mind
 
 ## Tech Stack
 
-- **Framework**: [SvelteKit](https://kit.svelte.dev/)
+- **Framework**: [SvelteKit](https://kit.svelte.dev/) (Svelte 5)
 - **UI Components**: [shadcn-svelte](https://www.shadcn-svelte.com/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) v4
 - **Icons**: [Lucide Icons](https://lucide.dev/)
-- **PWA Support**: Custom service worker implementation
+- **Typography**: Fraunces (serif) + Geist (sans)
+- **PWA**: Custom service worker
 - **Package Manager**: [Bun](https://bun.sh/)
 
 ## Getting Started
@@ -59,42 +61,56 @@ bun run build
 
 ## Usage
 
-1. **First Visit**: Enter your birth date to start tracking your life journey
-2. **View Progress**: See your life progress visualized as a grid of weeks
-3. **Install as PWA**: Click the install button in your browser to use the app offline
-4. **Reset Data**: Use the reset button in the stats page if you want to start over
+1. **First Visit**: Enter your birth date and life expectancy to generate your grid
+2. **Mark Moments**: Click any week to add an event, milestone, or turning point
+3. **Export Data**: Click **Export** on the stats page to download your data as JSON
+4. **Import Data**: Click **Import** to restore from a previously exported JSON file
+5. **Reset**: Erase all data and start over from the setup page
 
 ## PWA Features
 
 - **Offline Support**: Works without an internet connection
 - **Installable**: Add to your home screen for quick access
-- **Data Persistence**: Your data is saved locally and syncs when online
-- **Automatic Updates**: Service worker ensures you always have the latest version
+- **Data Persistence**: All data is stored locally in the browser
+- **Automatic Updates**: Service worker keeps the app up to date
 
-## Development
-
-### Project Structure
+## Project Structure
 
 ```
 life-progress/
 ├── src/
 │   ├── lib/
-│   │   ├── components/     # UI components
-│   │   ├── utils/         # Utility functions
-│   │   └── stores/        # Svelte stores
-│   ├── routes/            # SvelteKit routes
-│   └── app.html          # HTML template
-├── static/               # Static assets
-├── public/              # Public files
+│   │   ├── components/        # UI components
+│   │   │   ├── LifeProgressGrid.svelte   # Main grid visualization
+│   │   │   ├── EventDialog.svelte        # Add/edit events on weeks
+│   │   │   ├── EventTimeline.svelte      # Sidebar event timeline
+│   │   │   ├── Landing.svelte            # Home/landing page
+│   │   │   ├── Setup.svelte              # Birthday setup form
+│   │   │   ├── TopBar.svelte              # Navigation masthead
+│   │   │   └── ui/                        # shadcn-svelte primitives
+│   │   ├── dataIO.ts          # Export & import logic
+│   │   ├── stores.ts          # Svelte stores with localStorage persistence
+│   │   ├── weekUtils.ts       # Week calculation utilities
+│   │   ├── utils.ts           # General utilities
+│   │   └── quotes.ts          # Curated quotes
+│   ├── routes/
+│   │   ├── +page.svelte       # Landing page
+│   │   ├── +layout.svelte     # Root layout with TopBar & PWA setup
+│   │   ├── setup/+page.svelte # Setup route
+│   │   └── stats/+page.svelte# Stats (grid) route
+│   └── app.css                # Global styles & design tokens
+├── static/                    # Static assets (icons, SW, manifest)
 └── package.json
 ```
 
-### Key Components
+## Development
 
-- `LifeProgressGrid.svelte`: Main visualization component
-- `BirthDateForm.svelte`: Initial setup form
-- `service-worker.js`: PWA functionality
-- `manifest.json`: PWA configuration
+```bash
+bun run dev          # Start dev server
+bun run check        # Type checking with svelte-check
+bun run test:unit    # Run unit tests
+bun run build        # Production build
+```
 
 ## Contributing
 
@@ -108,7 +124,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
@@ -116,7 +132,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built with [SvelteKit](https://kit.svelte.dev/)
 - UI components from [shadcn-svelte](https://www.shadcn-svelte.com/)
 - Icons from [Lucide](https://lucide.dev/)
-
-## Support
-
-If you find this project helpful, please consider giving it a star on GitHub. For issues and feature requests, please use the GitHub issue tracker.
