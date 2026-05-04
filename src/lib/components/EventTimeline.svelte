@@ -35,6 +35,18 @@
             .sort((a, b) => b.weekIndex - a.weekIndex)
     );
 
+    // Group filtered events by age year, descending
+    const groupedByYear = $derived.by(() => {
+        const groups = new Map<number, typeof filtered>();
+        for (const e of filtered) {
+            const year = ageAtWeek(e.weekIndex).years;
+            const list = groups.get(year);
+            if (list) list.push(e);
+            else groups.set(year, [e]);
+        }
+        return [...groups.entries()].sort((a, b) => b[0] - a[0]);
+    });
+
     const dateFmt = new Intl.DateTimeFormat(locale, {
         year: 'numeric',
         month: 'long',
@@ -113,59 +125,67 @@
                 {/if}
             </div>
         {:else}
-            <ol class="relative space-y-0">
+            <div class="relative space-y-0">
                 <!-- Vertical thread line -->
                 <span class="absolute left-[7px] top-2 bottom-2 w-px bg-border/80" aria-hidden="true"></span>
 
-                {#each filtered as event, i (event.id)}
-                    {@const Icon = iconFor(event.type)}
-                    {@const age = ageAtWeek(event.weekIndex)}
-                    <li class="relative pl-7">
-                        <button
-                            type="button"
-                            onclick={() => onSelect(event)}
-                            class="group block w-full text-left py-3 pr-2 -ml-1 pl-1 rounded-md hover:bg-muted/40 transition-colors"
-                        >
-                            <!-- Marker on the thread -->
-                            <span class="absolute left-0 top-4 flex items-center justify-center w-[15px] h-[15px] rounded-full bg-card border border-border group-hover:border-primary transition-colors">
-                                <Icon
-                                    class={cn('h-[8px] w-[8px]', colorFor(event.type))}
-                                    style={event.type !== 'event' ? 'fill: currentColor;' : ''}
-                                />
-                            </span>
+                {#each groupedByYear as [year, yearEvents]}
+                    <!-- Year group header -->
+                    <div class="relative pl-7 pt-4 pb-1 first:pt-0">
+                        <span class="absolute left-0 top-5 first:top-1 flex items-center justify-center w-[15px] h-[15px] rounded-full bg-card border border-border/60" aria-hidden="true">
+                            <span class="block w-[5px] h-[5px] rounded-full bg-border"></span>
+                        </span>
+                        <p class="eyebrow text-[0.6rem] text-muted-foreground/70">Age {year}</p>
+                    </div>
 
-                            <div class="flex items-baseline justify-between gap-3">
-                                <p class="font-serif text-base leading-snug truncate group-hover:text-primary transition-colors">
-                                    {event.title}
-                                </p>
-                                <span class="text-[10px] text-muted-foreground tabular whitespace-nowrap shrink-0 mt-0.5">
-                                    age {age.years}
-                                </span>
-                            </div>
+                    <ol class="space-y-0">
+                        {#each yearEvents as event (event.id)}
+                            {@const Icon = iconFor(event.type)}
+                            <li class="relative pl-7">
+                                <button
+                                    type="button"
+                                    onclick={() => onSelect(event)}
+                                    class="group block w-full text-left py-3 pr-2 -ml-1 pl-1 rounded-md hover:bg-muted/40 transition-colors"
+                                >
+                                    <!-- Marker on the thread -->
+                                    <span class="absolute left-0 top-4 flex items-center justify-center w-[15px] h-[15px] rounded-full bg-card border border-border group-hover:border-primary transition-colors">
+                                        <Icon
+                                            class={cn('h-[8px] w-[8px]', colorFor(event.type))}
+                                            style={event.type !== 'event' ? 'fill: currentColor;' : ''}
+                                        />
+                                    </span>
 
-                            <p class="text-[11px] text-muted-foreground tabular mt-0.5">
-                                {dateFmt.format(new Date(event.date))}
-                            </p>
+                                    <div class="flex items-baseline justify-between gap-3">
+                                        <p class="font-serif text-base leading-snug truncate group-hover:text-primary transition-colors">
+                                            {event.title}
+                                        </p>
+                                    </div>
 
-                            {#if event.description}
-                                <p class="text-xs text-muted-foreground/90 mt-1.5 leading-relaxed line-clamp-2">
-                                    {event.description}
-                                </p>
-                            {/if}
+                                    <p class="text-[11px] text-muted-foreground tabular mt-0.5">
+                                        {dateFmt.format(new Date(event.date))}
+                                    </p>
 
-                            {#if event.tags.length > 0}
-                                <div class="flex flex-wrap gap-1 mt-2">
-                                    {#each event.tags as tag}
-                                        <span class="text-[10px] text-muted-foreground/80 italic">
-                                            #{tag}
-                                        </span>
-                                    {/each}
-                                </div>
-                            {/if}
-                        </button>
-                    </li>
+                                    {#if event.description}
+                                        <p class="text-xs text-muted-foreground/90 mt-1.5 leading-relaxed line-clamp-2">
+                                            {event.description}
+                                        </p>
+                                    {/if}
+
+                                    {#if event.tags.length > 0}
+                                        <div class="flex flex-wrap gap-1 mt-2">
+                                            {#each event.tags as tag}
+                                                <span class="text-[10px] text-muted-foreground/80 italic">
+                                                    #{tag}
+                                                </span>
+                                            {/each}
+                                        </div>
+                                    {/if}
+                                </button>
+                            </li>
+                        {/each}
+                    </ol>
                 {/each}
-            </ol>
+            </div>
         {/if}
     </div>
 </div>
