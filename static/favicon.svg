@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <style>
+    .bg { fill: #f6efe2; }
+    .lived { fill: #b85a3a; }
+    .remain { fill: #b85a3a; fill-opacity: 0.18; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #2a201a; }
+      .lived { fill: #d98760; }
+      .remain { fill: #d98760; fill-opacity: 0.22; }
+    }
+  </style>
+
+  <!-- Warm paper background, generously rounded -->
+  <rect class="bg" x="0" y="0" width="32" height="32" rx="6" ry="6" />
+
+  <!-- 4×4 dot grid: ~6/16 = 37.5% "lived" (top row + first two of row 2) -->
+  <g>
+    <!-- Row 0 — all lived -->
+    <rect class="lived"  x="5"  y="5"  width="4" height="4" rx="1" />
+    <rect class="lived"  x="11" y="5"  width="4" height="4" rx="1" />
+    <rect class="lived"  x="17" y="5"  width="4" height="4" rx="1" />
+    <rect class="lived"  x="23" y="5"  width="4" height="4" rx="1" />
+
+    <!-- Row 1 — first two lived -->
+    <rect class="lived"  x="5"  y="11" width="4" height="4" rx="1" />
+    <rect class="lived"  x="11" y="11" width="4" height="4" rx="1" />
+    <rect class="remain" x="17" y="11" width="4" height="4" rx="1" />
+    <rect class="remain" x="23" y="11" width="4" height="4" rx="1" />
+
+    <!-- Row 2 — all remaining -->
+    <rect class="remain" x="5"  y="17" width="4" height="4" rx="1" />
+    <rect class="remain" x="11" y="17" width="4" height="4" rx="1" />
+    <rect class="remain" x="17" y="17" width="4" height="4" rx="1" />
+    <rect class="remain" x="23" y="17" width="4" height="4" rx="1" />
+
+    <!-- Row 3 — all remaining -->
+    <rect class="remain" x="5"  y="23" width="4" height="4" rx="1" />
+    <rect class="remain" x="11" y="23" width="4" height="4" rx="1" />
+    <rect class="remain" x="17" y="23" width="4" height="4" rx="1" />
+    <rect class="remain" x="23" y="23" width="4" height="4" rx="1" />
+  </g>
+</svg>

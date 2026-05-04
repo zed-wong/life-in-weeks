@@ -2,8 +2,19 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
+		<link rel="alternate icon" type="image/png" href="%sveltekit.assets%/favicon.png" />
+		<link rel="mask-icon" href="%sveltekit.assets%/favicon.svg" color="#b85a3a" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+		<!-- Editorial typography: Fraunces (variable serif, optical sizing) + Geist (refined sans) -->
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,0..100;1,9..144,300..700,0..100&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap"
+			rel="stylesheet"
+		/>
+
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

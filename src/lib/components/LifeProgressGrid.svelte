@@ -1,7 +1,6 @@
-<!-- LifeProgressGrid.svelte -->
+<!-- LifeProgressGrid.svelte — editorial life-in-weeks visualization -->
 <script lang="ts">
-    import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "$lib/components/ui/card/index";
-    import { userDataStore } from "$lib/stores";
+    import { userDataStore, lifeEventsStore, type LifeEvent } from "$lib/stores";
     import { cn } from "$lib/utils";
     import { Button } from "$lib/components/ui/button";
     import { goto } from '$app/navigation';
@@ -17,75 +16,119 @@
         AlertDialogTrigger
     } from "$lib/components/ui/alert-dialog";
     import { onMount } from 'svelte';
+    import EventDialog from './EventDialog.svelte';
+    import EventTimeline from './EventTimeline.svelte';
+    import StarIcon from '@lucide/svelte/icons/star';
+    import DiamondIcon from '@lucide/svelte/icons/diamond';
+    import CircleIcon from '@lucide/svelte/icons/circle';
+    import ListIcon from '@lucide/svelte/icons/list';
+    import XIcon from '@lucide/svelte/icons/x';
+    import { ageAtWeek, weekRangeLabel } from '$lib/weekUtils';
 
-    // Access store value using $derived in Svelte 5
     const userData = $derived($userDataStore);
-    
-    // Redirect to setup if no user data
+    const events = $derived($lifeEventsStore ?? []);
+
     $effect(() => {
-        if (!userData) {
-            goto('/setup');
-        }
+        if (!userData) goto('/setup');
     });
 
-    // Only calculate values if we have user data
     const birthday = $derived(userData?.birthday);
     const lifeExpectancy = $derived(userData?.lifeExpectancy);
-
-    let showResetDialog = $state(false);
+    const locale = $derived(userData?.locale ?? 'en-US');
 
     function handleReset() {
         userDataStore.set(null);
+        lifeEventsStore.set([]);
         goto('/setup');
     }
 
-    function handleShowReset() {
-        showResetDialog = true;
-    }
-
-    function handleHideReset() {
-        showResetDialog = false;
-    }
-
-    // Calculate weeks lived using $derived, only if we have the required data
     const weeksLived = $derived(birthday ? Math.floor((Date.now() - new Date(birthday).getTime()) / (7 * 24 * 60 * 60 * 1000)) : 0);
     const weeksLeft = $derived(lifeExpectancy ? (lifeExpectancy * 52) - weeksLived : 0);
     const totalWeeks = $derived(lifeExpectancy ? lifeExpectancy * 52 : 0);
     const lifeProgress = $derived(totalWeeks ? (weeksLived / totalWeeks) * 100 : 0);
 
-    // Color scheme for different life periods (using Tailwind colors with gradients)
-    const colorPeriods = [
-        { start: 0, end: 9, color: 'bg-gradient-to-br from-blue-400 to-blue-600', pastColor: 'bg-gradient-to-br from-blue-400 to-blue-600', futureColor: 'bg-blue-50 dark:bg-blue-950/30' },
-        { start: 10, end: 19, color: 'bg-gradient-to-br from-emerald-400 to-emerald-600', pastColor: 'bg-gradient-to-br from-emerald-400 to-emerald-600', futureColor: 'bg-emerald-50 dark:bg-emerald-950/30' },
-        { start: 20, end: 29, color: 'bg-gradient-to-br from-amber-400 to-amber-600', pastColor: 'bg-gradient-to-br from-amber-400 to-amber-600', futureColor: 'bg-amber-50 dark:bg-amber-950/30' },
-        { start: 30, end: 39, color: 'bg-gradient-to-br from-orange-400 to-orange-600', pastColor: 'bg-gradient-to-br from-orange-400 to-orange-600', futureColor: 'bg-orange-50 dark:bg-orange-950/30' },
-        { start: 40, end: 49, color: 'bg-gradient-to-br from-rose-400 to-rose-600', pastColor: 'bg-gradient-to-br from-rose-400 to-rose-600', futureColor: 'bg-rose-50 dark:bg-rose-950/30' },
-        { start: 50, end: 59, color: 'bg-gradient-to-br from-purple-400 to-purple-600', pastColor: 'bg-gradient-to-br from-purple-400 to-purple-600', futureColor: 'bg-purple-50 dark:bg-purple-950/30' },
-        { start: 60, end: 69, color: 'bg-gradient-to-br from-cyan-400 to-cyan-600', pastColor: 'bg-gradient-to-br from-cyan-400 to-cyan-600', futureColor: 'bg-cyan-50 dark:bg-cyan-950/30' },
-        { start: 70, end: 79, color: 'bg-gradient-to-br from-pink-400 to-pink-600', pastColor: 'bg-gradient-to-br from-pink-400 to-pink-600', futureColor: 'bg-pink-50 dark:bg-pink-950/30' },
-        { start: 80, end: 89, color: 'bg-gradient-to-br from-teal-400 to-teal-600', pastColor: 'bg-gradient-to-br from-teal-400 to-teal-600', futureColor: 'bg-teal-50 dark:bg-teal-950/30' },
-        { start: 90, end: 99, color: 'bg-gradient-to-br from-violet-400 to-violet-600', pastColor: 'bg-gradient-to-br from-violet-400 to-violet-600', futureColor: 'bg-violet-50 dark:bg-violet-950/30' },
-    ];
+    // weekIndex -> LifeEvent[] (all events at that week, sorted by date)
+    const eventsByWeek = $derived.by(() => {
+        const m = new Map<number, LifeEvent[]>();
+        for (const ev of events) {
+            const list = m.get(ev.weekIndex);
+            if (list) list.push(ev);
+            else m.set(ev.weekIndex, [ev]);
+        }
+        for (const list of m.values()) {
+            list.sort((a, b) => a.date.localeCompare(b.date));
+        }
+        return m;
+    });
 
-    // Function to get color classes for a specific week
-    function getWeekClasses(weekIndex: number): string {
-        const year = Math.floor(weekIndex / 52);
-        const period = colorPeriods.find(p => year >= p.start && year <= p.end);
-        
-        if (!period) return 'bg-gray-50 dark:bg-gray-900/30'; // Default light gray for future weeks
-        
-        const isPast = weekIndex < weeksLived;
-        return isPast ? period.pastColor : period.futureColor;
+    // The marker shown on the cell uses the highest-priority event type
+    const priority = { 'turning-point': 3, milestone: 2, event: 1 } as const;
+    function topEvent(list: LifeEvent[] | undefined): LifeEvent | null {
+        if (!list || list.length === 0) return null;
+        return list.reduce((best, ev) =>
+            priority[ev.type] > priority[best.type] ? ev : best
+        );
     }
 
-    // Generate array of weeks for the grid
-    const weeks = $derived(Array.from({ length: totalWeeks }, (_, i) => ({
-        index: i,
-        classes: getWeekClasses(i)
-    })));
+    function eraVar(year: number): string {
+        const idx = Math.min(Math.floor(year / 10), 9);
+        return `var(--era-${idx + 1})`;
+    }
+
+    const nowWeekIndex = $derived(weeksLived);
+
+    // Dialog state — we now only need to track which week is active
+    let dialogOpen = $state(false);
+    let activeWeekIndex = $state(0);
+
+    // Mobile timeline drawer
+    let timelineOpen = $state(false);
+
+    function openWeek(weekIndex: number) {
+        activeWeekIndex = weekIndex;
+        dialogOpen = true;
+        clearHover();
+    }
+
+    function openEvent(event: LifeEvent) {
+        activeWeekIndex = event.weekIndex;
+        dialogOpen = true;
+        timelineOpen = false;
+    }
+
+    function closeDialog() { dialogOpen = false; }
+
+    // ===== Hover preview ==========================================
+    let hoverWeek = $state<number | null>(null);
+    let hoverX = $state(0);
+    let hoverY = $state(0);
+    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function handleEnter(weekIndex: number, e: MouseEvent | FocusEvent) {
+        if (hoverTimer) clearTimeout(hoverTimer);
+        const target = e.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        hoverX = rect.left + rect.width / 2;
+        hoverY = rect.top;
+        const list = eventsByWeek.get(weekIndex);
+        const delay = list && list.length > 0 ? 120 : 220;
+        hoverTimer = setTimeout(() => {
+            hoverWeek = weekIndex;
+        }, delay);
+    }
+    function clearHover() {
+        if (hoverTimer) clearTimeout(hoverTimer);
+        hoverTimer = null;
+        hoverWeek = null;
+    }
+
+    const hoverEvents = $derived(hoverWeek !== null ? (eventsByWeek.get(hoverWeek) ?? []) : []);
+    const hoverAge = $derived(hoverWeek !== null ? ageAtWeek(hoverWeek) : { years: 0, weeks: 0 });
+    const hoverRange = $derived(
+        hoverWeek !== null && birthday ? weekRangeLabel(birthday, hoverWeek, locale) : ''
+    );
 
     onMount(() => {
-        // Ensure viewport meta tag exists with proper settings
         let viewportMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement;
         if (!viewportMeta) {
             viewportMeta = document.createElement('meta') as HTMLMetaElement;
@@ -94,124 +137,389 @@
         }
         viewportMeta.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
     });
+
+    const milestoneCount = $derived(events.filter((e) => e.type === 'milestone').length);
+    const turningPointCount = $derived(events.filter((e) => e.type === 'turning-point').length);
+    const eventCount = $derived(events.filter((e) => e.type === 'event').length);
+
+    const eraLabels = [
+        { decade: 0, label: 'Childhood' },
+        { decade: 1, label: 'Adolescence' },
+        { decade: 2, label: 'Twenties' },
+        { decade: 3, label: 'Thirties' },
+        { decade: 4, label: 'Forties' },
+        { decade: 5, label: 'Fifties' },
+        { decade: 6, label: 'Sixties' },
+        { decade: 7, label: 'Seventies' },
+        { decade: 8, label: 'Eighties' },
+        { decade: 9, label: 'Nineties+' }
+    ];
+    const visibleEras = $derived(eraLabels.slice(0, Math.min(10, Math.ceil((lifeExpectancy ?? 0) / 10))));
+
+    function iconFor(t: LifeEvent['type']) {
+        if (t === 'milestone') return StarIcon;
+        if (t === 'turning-point') return DiamondIcon;
+        return CircleIcon;
+    }
+    function colorFor(t: LifeEvent['type']) {
+        if (t === 'milestone') return 'text-marker-milestone';
+        if (t === 'turning-point') return 'text-marker-turning';
+        return 'text-foreground/70';
+    }
+
+    const dateFmt = $derived(
+        new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' })
+    );
 </script>
 
 {#if userData}
-    <div class="min-h-screen bg-gradient-to-b from-background to-background/95 py-4 sm:py-12 pt-[env(safe-area-inset-top)] px-[env(safe-area-inset-left)] pb-[env(safe-area-inset-bottom)]">
-        <div class="container mx-auto px-2 sm:px-4">
-            <Card class="backdrop-blur-sm bg-background/80 border-muted/20 shadow-xl py-4">
-                <CardHeader class="space-y-4 pb-4 sm:pb-8 pt-2 sm:pt-4">
-                    <div class="flex flex-col items-center gap-4 sm:gap-6">
-                        <CardTitle class="text-center text-xl sm:text-2xl font-bold flex flex-col items-center gap-2 sm:gap-3">
-                            <span class="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-6">
-                                {lifeProgress.toFixed(1)}%
-                            </span>
-                            <div class="flex flex-col items-center gap-1 text-muted-foreground">
-                                <span class="text-xs sm:text-sm">{weeksLived.toLocaleString()} weeks lived</span>
-                                <span class="text-xs sm:text-sm">{weeksLeft.toLocaleString()} weeks remaining</span>
-                            </div>
-                        </CardTitle>
+    <div class="mx-auto max-w-[1400px] px-6 sm:px-10 lg:px-16 pt-8 sm:pt-12 pb-20 pt-[max(env(safe-area-inset-top),2rem)] pl-[max(env(safe-area-inset-left),1.5rem)] pr-[max(env(safe-area-inset-right),1.5rem)] pb-[max(env(safe-area-inset-bottom),5rem)]">
+        <!-- Editorial masthead ============================================ -->
+        <header class="grid grid-cols-1 lg:grid-cols-12 gap-y-8 lg:gap-x-12 mb-12 sm:mb-16">
+            <div class="lg:col-span-7 lg:col-start-1 rise">
+                <p class="eyebrow mb-4">A life in {totalWeeks.toLocaleString()} weeks</p>
+                <h2 class="text-balance leading-[1.05]">
+                    <span class="italic-display text-primary">{lifeProgress.toFixed(1)}%</span>
+                    of your weeks<br /> are now behind you.
+                </h2>
+            </div>
+
+            <aside class="lg:col-span-4 lg:col-start-9 rise rise-delay-2">
+                <dl class="border-l border-border pl-6 sm:pl-8 space-y-7">
+                    <div>
+                        <dt class="eyebrow mb-1">Weeks lived</dt>
+                        <dd class="display-number text-3xl sm:text-4xl tabular text-foreground">
+                            {weeksLived.toLocaleString()}
+                        </dd>
                     </div>
-                </CardHeader>
-                <CardContent class="p-2 sm:p-4">
-                    <div class="flex flex-col gap-4">
-                        <div class="flex flex-col gap-2">
-                            <div class="flex items-center justify-between">
-                                <h3 class="text-sm sm:text-base font-medium">Your Life in Weeks</h3>
-                                <div class="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                                    <div class="flex items-center gap-1">
-                                        <div class="w-2 h-2 rounded-sm bg-primary"></div>
-                                        <span>Lived</span>
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                        <div class="w-2 h-2 rounded-sm bg-muted"></div>
-                                        <span>Remaining</span>
-                                    </div>
-                                </div>
+                    <div>
+                        <dt class="eyebrow mb-1">Weeks remaining</dt>
+                        <dd class="display-number text-3xl sm:text-4xl tabular text-foreground/70">
+                            {weeksLeft.toLocaleString()}
+                        </dd>
+                    </div>
+                    {#if events.length > 0}
+                        <hr class="rule" />
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <dt class="eyebrow mb-1 text-[0.6rem]">Events</dt>
+                                <dd class="font-serif text-2xl tabular">{eventCount}</dd>
                             </div>
-                            <div class="relative overflow-x-auto -mx-2 sm:mx-0">
-                                <div class="flex gap-2 min-w-max px-2 sm:px-0">
-                                    <!-- Year labels -->
-                                    <div class="flex flex-col justify-around pr-2 sm:pr-4 text-[10px] sm:text-xs text-muted-foreground font-medium">
-                                        {#each Array.from({ length: Math.ceil(totalWeeks / 52) }, (_, i) => i) as year}
-                                            <div class="h-2 sm:h-3 flex items-center">
-                                                {#if year % 5 === 0}
-                                                    <span class="bg-background/80 px-1 sm:px-2 py-0.5 rounded-full">{year}</span>
-                                                {/if}
-                                            </div>
-                                        {/each}
-                                    </div>
-                                    <!-- Grid -->
-                                    <div class="grid grid-cols-52 gap-[1px] sm:gap-[2px] w-fit bg-muted/10 p-2 sm:p-4 rounded-xl shadow-inner">
-                                        {#each weeks as week}
-                                            <div 
-                                                class={cn(
-                                                    "w-2 h-2 sm:w-3 sm:h-3 rounded-sm sm:rounded-md transition-all duration-300 hover:scale-150 hover:shadow-lg hover:z-10",
-                                                    week.classes
-                                                )}
-                                                title="Week {week.index + 1} (Year {Math.floor(week.index / 52)})"
-                                            > </div>
-                                        {/each}
-                                    </div>
-                                </div>
+                            <div>
+                                <dt class="eyebrow mb-1 text-[0.6rem]">Milestones</dt>
+                                <dd class="font-serif text-2xl tabular text-marker-milestone">{milestoneCount}</dd>
+                            </div>
+                            <div>
+                                <dt class="eyebrow mb-1 text-[0.6rem]">Turns</dt>
+                                <dd class="font-serif text-2xl tabular text-marker-turning">{turningPointCount}</dd>
                             </div>
                         </div>
+                    {/if}
+                </dl>
+            </aside>
+        </header>
+
+        <!-- Main two-column layout: Grid + Timeline ====================== -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-y-12 lg:gap-x-12">
+
+            <section class="lg:col-span-8 lg:col-start-1 rise rise-delay-2">
+                <div class="flex items-baseline justify-between mb-4">
+                    <h3 class="font-serif text-xl">Your weeks, all of them.</h3>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="lg:hidden text-muted-foreground hover:text-foreground"
+                        onclick={() => (timelineOpen = true)}
+                    >
+                        <ListIcon class="h-4 w-4 mr-1.5" />
+                        Timeline
+                    </Button>
+                </div>
+
+                <p class="text-sm text-muted-foreground mb-6 max-w-xl leading-relaxed">
+                    Each square is one week of your life. <em>Hover</em> to peek,
+                    <em>tap</em> to add or revise — a milestone <span class="text-marker-milestone">★</span>,
+                    a turning point <span class="text-marker-turning">◆</span>, or any moment worth keeping.
+                </p>
+
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="relative -mx-2 sm:mx-0 overflow-x-auto" role="presentation" onmouseleave={clearHover}>
+                    <div class="flex min-w-max items-start gap-3 sm:gap-4 px-2 sm:px-0">
+                        <!-- Year axis — parallel CSS grid with identical row pitch to the cells -->
+                        <div
+                            class="grid grid-flow-row auto-rows-[8px] sm:auto-rows-[12px] gap-[2px] sm:gap-[3px] text-[10px] sm:text-[11px] tabular text-muted-foreground/70"
+                        >
+                            {#each Array.from({ length: Math.ceil(totalWeeks / 52) }, (_, i) => i) as year}
+                                <div class="flex items-center leading-none whitespace-nowrap overflow-visible">
+                                    {#if year === 0}
+                                        <span class="font-serif italic">birth</span>
+                                    {:else if year % 10 === 0}
+                                        <span class="font-serif italic">{year}</span>
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+
+                        <!-- The 52-column dot grid -->
+                        <div
+                            class="grid grid-cols-52 gap-[2px] sm:gap-[3px] w-fit"
+                            role="grid"
+                            aria-label="Life in weeks"
+                        >
+                            {#each Array.from({ length: totalWeeks }, (_, i) => i) as weekIndex}
+                                {@const year = Math.floor(weekIndex / 52)}
+                                {@const isPast = weekIndex < weeksLived}
+                                {@const isNow = weekIndex === nowWeekIndex}
+                                {@const list = eventsByWeek.get(weekIndex)}
+                                {@const ev = topEvent(list)}
+                                {@const count = list?.length ?? 0}
+                                <button
+                                    type="button"
+                                    onclick={() => openWeek(weekIndex)}
+                                    onmouseenter={(e) => handleEnter(weekIndex, e)}
+                                    onfocus={(e) => handleEnter(weekIndex, e)}
+                                    onmouseleave={clearHover}
+                                    onblur={clearHover}
+                                    class={cn(
+                                        "relative w-[8px] h-[8px] sm:w-[12px] sm:h-[12px] rounded-[2px] cursor-pointer",
+                                        "transition-transform duration-200 ease-out hover:scale-[1.8] hover:z-10 focus-visible:scale-[1.8] focus-visible:z-10 focus:outline-none",
+                                        ev && 'outline outline-1 outline-foreground/40 outline-offset-[1px]',
+                                        isNow && 'animate-pulse'
+                                    )}
+                                    style:background-color={isPast ? eraVar(year) : `oklch(from ${eraVar(year)} l c h / 0.18)`}
+                                    aria-label={count > 0
+                                        ? `Week ${weekIndex + 1}, ${count} ${count === 1 ? 'event' : 'events'}`
+                                        : `Week ${weekIndex + 1}, year ${year}, no event`}
+                                >
+                                    {#if ev?.type === 'milestone'}
+                                        <span class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <StarIcon class="h-[7px] w-[7px] sm:h-[10px] sm:w-[10px] text-marker-milestone" style="fill: currentColor;" />
+                                        </span>
+                                    {:else if ev?.type === 'turning-point'}
+                                        <span class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <DiamondIcon class="h-[7px] w-[7px] sm:h-[10px] sm:w-[10px] text-marker-turning" style="fill: currentColor;" />
+                                        </span>
+                                    {:else if ev}
+                                        <span class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span class="block w-[3px] h-[3px] sm:w-[4px] sm:h-[4px] rounded-full bg-foreground/85"></span>
+                                        </span>
+                                    {/if}
+
+                                    <!-- Stack badge: show count when >1 events on this week -->
+                                    {#if count > 1}
+                                        <span
+                                            class="absolute -top-[3px] -right-[3px] sm:-top-[4px] sm:-right-[4px] flex items-center justify-center min-w-[10px] h-[10px] sm:min-w-[12px] sm:h-[12px] px-[2px] rounded-full bg-primary text-primary-foreground text-[7px] sm:text-[8px] font-semibold tabular leading-none pointer-events-none"
+                                            aria-hidden="true"
+                                        >
+                                            {count}
+                                        </span>
+                                    {/if}
+                                </button>
+                            {/each}
+                        </div>
+
+                        <!-- Era axis — each era spans 10 rows of pitch 15px (sm) -->
+                        <div class="hidden sm:flex flex-col text-[10px] tabular text-muted-foreground ml-2">
+                            {#each visibleEras as era}
+                                <div class="h-[150px] flex items-start leading-none">
+                                    <span
+                                        class="font-serif italic whitespace-nowrap"
+                                        style:color="oklch(from {`var(--era-${era.decade + 1})`} l c h)"
+                                    >
+                                        {era.label}
+                                    </span>
+                                </div>
+                            {/each}
+                        </div>
                     </div>
-                </CardContent>
-                <CardFooter class="flex justify-end border-t pt-4 sm:pt-6 px-4 sm:px-6">
+                </div>
+
+                <!-- Legend -->
+                <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-muted-foreground">
+                    <div class="flex items-center gap-1.5">
+                        <span class="block w-3 h-3 rounded-[2px] bg-era-5"></span>
+                        <span>Lived</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="block w-3 h-3 rounded-[2px]" style="background-color: oklch(from var(--era-5) l c h / 0.18);"></span>
+                        <span>Remaining</span>
+                    </div>
+                    <div class="h-3 w-px bg-border"></div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="block w-1 h-1 rounded-full bg-foreground/85"></span>
+                        <span>Event</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <StarIcon class="h-3 w-3 text-marker-milestone" style="fill: currentColor;" />
+                        <span>Milestone</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <DiamondIcon class="h-3 w-3 text-marker-turning" style="fill: currentColor;" />
+                        <span>Turning point</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="flex items-center justify-center min-w-[12px] h-[12px] px-[2px] rounded-full bg-primary text-primary-foreground text-[8px] font-semibold tabular">2</span>
+                        <span>Multiple</span>
+                    </div>
+                </div>
+
+                <div class="mt-16 flex items-center justify-between">
+                    <div class="ornament" aria-hidden="true">❦</div>
                     <AlertDialog>
-                        <AlertDialogTrigger>
-                            <Button 
-                                variant="outline" 
-                                class="text-muted-foreground hover:text-destructive text-sm sm:text-base"
-                            >
-                                Reset Data
-                            </Button>
+                        <AlertDialogTrigger
+                            class="text-xs text-muted-foreground/70 hover:text-destructive underline-offset-4 hover:underline transition-colors"
+                        >
+                            Reset everything
                         </AlertDialogTrigger>
-                        <AlertDialogContent class="w-[95vw] max-w-md mx-2 sm:mx-auto">
+                        <AlertDialogContent class="w-[95vw] max-w-md mx-2 sm:mx-auto bg-card border-border">
                             <AlertDialogHeader>
-                                <AlertDialogTitle class="text-lg sm:text-xl">Reset Your Data?</AlertDialogTitle>
-                                <AlertDialogDescription class="text-sm sm:text-base">
-                                    This will clear your current life journey data and take you back to the setup page. This action cannot be undone.
+                                <AlertDialogTitle class="font-serif text-2xl">
+                                    Begin again?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription class="prose-body text-sm">
+                                    This will erase your birthday, lifespan, and every event you've recorded.
+                                    The grid will be blank, like a new notebook. There is no undo.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter class="gap-2 sm:gap-3">
-                                <AlertDialogCancel class="text-sm sm:text-base">Cancel</AlertDialogCancel>
-                                <AlertDialogAction 
-                                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-sm sm:text-base"
+                                <AlertDialogCancel class="rounded-full">Keep it</AlertDialogCancel>
+                                <AlertDialogAction
+                                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full"
                                     onclick={handleReset}
                                 >
-                                    Reset
+                                    Erase everything
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
-                </CardFooter>
-            </Card>
+                </div>
+            </section>
+
+            <aside class="hidden lg:block lg:col-span-4 lg:col-start-9 rise rise-delay-3">
+                <div class="sticky top-6">
+                    <EventTimeline locale={locale} onSelect={openEvent} />
+                </div>
+            </aside>
         </div>
     </div>
+
+    <!-- Hover preview tooltip ========================================= -->
+    {#if hoverWeek !== null && hoverEvents.length > 0}
+        <div
+            class="pointer-events-none fixed z-[60] hidden sm:block"
+            style:left="{Math.max(12, Math.min(hoverX, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 332))}px"
+            style:top="{hoverY}px"
+            style:transform="translate(-50%, calc(-100% - 14px))"
+        >
+            <div class="bg-card border border-border shadow-2xl rounded-lg p-3.5 w-[20rem] max-w-[calc(100vw-1.5rem)]">
+                <p class="eyebrow text-[0.6rem] mb-2">
+                    Week {hoverWeek + 1} · Age {hoverAge.years}<span class="opacity-60">y</span> {hoverAge.weeks}<span class="opacity-60">w</span>
+                    <span class="ml-1 text-muted-foreground/60 normal-case tracking-normal">· {hoverRange}</span>
+                </p>
+                <ul class="space-y-2.5">
+                    {#each hoverEvents as ev (ev.id)}
+                        {@const Icon = iconFor(ev.type)}
+                        <li class="flex items-start gap-2.5">
+                            <span class={cn('mt-1 shrink-0', colorFor(ev.type))}>
+                                <Icon
+                                    class="h-3 w-3"
+                                    style={ev.type !== 'event' ? 'fill: currentColor;' : ''}
+                                />
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="font-serif text-sm leading-snug truncate">{ev.title}</p>
+                                <p class="text-[10px] text-muted-foreground tabular mt-0.5">
+                                    {dateFmt.format(new Date(ev.date))}
+                                </p>
+                                {#if ev.description}
+                                    <p class="text-[11px] text-muted-foreground/85 mt-1 line-clamp-2 leading-snug">
+                                        {ev.description}
+                                    </p>
+                                {/if}
+                            </div>
+                        </li>
+                    {/each}
+                </ul>
+                {#if hoverEvents.length > 1}
+                    <p class="mt-3 pt-2 border-t border-border/60 text-[10px] text-muted-foreground italic">
+                        Click to view all {hoverEvents.length} entries.
+                    </p>
+                {:else}
+                    <p class="mt-3 pt-2 border-t border-border/60 text-[10px] text-muted-foreground italic">
+                        Click to edit.
+                    </p>
+                {/if}
+            </div>
+        </div>
+    {:else if hoverWeek !== null}
+        {@const isPastHover = hoverWeek < weeksLived}
+        {@const isNowHover = hoverWeek === nowWeekIndex}
+        <div
+            class="pointer-events-none fixed z-[60] hidden sm:block"
+            style:left="{Math.max(12, Math.min(hoverX, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 232))}px"
+            style:top="{hoverY}px"
+            style:transform="translate(-50%, calc(-100% - 12px))"
+        >
+            <div class="bg-card/95 backdrop-blur-sm border border-border/80 shadow-xl rounded-md px-3 py-2 w-[14rem]">
+                <p class="eyebrow text-[0.6rem] mb-1.5 flex items-center gap-1.5">
+                    <span>Week {hoverWeek + 1}</span>
+                    {#if isNowHover}
+                        <span class="text-primary normal-case tracking-normal italic font-serif">· this week</span>
+                    {:else if isPastHover}
+                        <span class="text-muted-foreground/70 normal-case tracking-normal italic font-serif">· lived</span>
+                    {:else}
+                        <span class="text-muted-foreground/70 normal-case tracking-normal italic font-serif">· ahead</span>
+                    {/if}
+                </p>
+                <p class="font-serif text-sm tabular leading-snug">
+                    Age <span class="text-foreground">{hoverAge.years}</span><span class="text-muted-foreground/70">y</span>
+                    <span class="text-foreground ml-0.5">{hoverAge.weeks}</span><span class="text-muted-foreground/70">w</span>
+                </p>
+                <p class="text-[10px] text-muted-foreground tabular mt-1">
+                    {hoverRange}
+                </p>
+                <p class="mt-2 pt-1.5 border-t border-border/60 text-[10px] text-muted-foreground italic">
+                    Click to mark this week.
+                </p>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Mobile timeline drawer ========================================= -->
+    {#if timelineOpen}
+        <div
+            class="lg:hidden fixed inset-0 z-40 bg-background/70 backdrop-blur-md"
+            onclick={() => (timelineOpen = false)}
+            onkeydown={(e) => e.key === 'Escape' && (timelineOpen = false)}
+            role="button"
+            tabindex="-1"
+            aria-label="Close timeline"
+        ></div>
+        <aside class="lg:hidden fixed right-0 top-0 bottom-0 w-[88vw] max-w-sm z-50 bg-card border-l border-border shadow-2xl flex flex-col">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-border">
+                <p class="eyebrow">Timeline</p>
+                <button
+                    type="button"
+                    onclick={() => (timelineOpen = false)}
+                    class="text-muted-foreground hover:text-foreground p-1 -mr-1"
+                    aria-label="Close timeline"
+                >
+                    <XIcon class="h-5 w-5" />
+                </button>
+            </div>
+            <div class="flex-1 overflow-hidden p-5">
+                <EventTimeline locale={locale} onSelect={openEvent} />
+            </div>
+        </aside>
+    {/if}
+
+    {#if birthday}
+        <EventDialog
+            bind:open={dialogOpen}
+            birthday={birthday}
+            weekIndex={activeWeekIndex}
+            locale={locale}
+            onClose={closeDialog}
+        />
+    {/if}
 {/if}
-
-<style>
-    /* Custom grid columns for 52 weeks */
-    :global(.grid-cols-52) {
-        grid-template-columns: repeat(52, minmax(0, 1fr));
-    }
-
-    /* Improve touch targets on mobile */
-    @media (max-width: 640px) {
-        :global(.grid-cols-52 > div) {
-            min-width: 8px;
-            min-height: 8px;
-        }
-    }
-
-    /* Ensure proper viewport height on mobile */
-    :global(html) {
-        height: -webkit-fill-available;
-    }
-
-    :global(body) {
-        min-height: -webkit-fill-available;
-    }
-</style>

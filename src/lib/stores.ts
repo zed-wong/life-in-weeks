@@ -7,6 +7,20 @@ export interface UserData {
     locale: string;
 }
 
+// Event types: regular events, milestones, and turning points
+export type LifeEventType = 'event' | 'milestone' | 'turning-point';
+
+export interface LifeEvent {
+    id: string;
+    weekIndex: number;       // anchored to a specific week (0 = birth week)
+    date: string;            // ISO date string for precise display
+    title: string;
+    description?: string;
+    type: LifeEventType;
+    tags: string[];
+    color?: string;
+}
+
 // Helper function to safely access localStorage
 const getLocalStorage = (key: string): string | null => {
     if (typeof window === 'undefined') return null; // SSR check
@@ -67,4 +81,22 @@ function createPersistedStore<T>(key: string, initialValue: T | null = null) {
 }
 
 // Create and export the userData store
-export const userDataStore = createPersistedStore<UserData>('user-data'); 
+export const userDataStore = createPersistedStore<UserData>('user-data');
+
+// Create and export the lifeEvents store (an array of events, persisted)
+export const lifeEventsStore = createPersistedStore<LifeEvent[]>('life-events', []);
+
+// Helpers to add / update / remove individual events while persisting
+export function addLifeEvent(event: LifeEvent): void {
+    lifeEventsStore.update((events) => [...(events ?? []), event]);
+}
+
+export function updateLifeEvent(id: string, patch: Partial<LifeEvent>): void {
+    lifeEventsStore.update((events) =>
+        (events ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e))
+    );
+}
+
+export function removeLifeEvent(id: string): void {
+    lifeEventsStore.update((events) => (events ?? []).filter((e) => e.id !== id));
+}
