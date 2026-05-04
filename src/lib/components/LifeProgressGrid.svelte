@@ -23,7 +23,10 @@
     import CircleIcon from '@lucide/svelte/icons/circle';
     import ListIcon from '@lucide/svelte/icons/list';
     import XIcon from '@lucide/svelte/icons/x';
+    import DownloadIcon from '@lucide/svelte/icons/download';
+    import UploadIcon from '@lucide/svelte/icons/upload';
     import { ageAtWeek, weekRangeLabel } from '$lib/weekUtils';
+    import { downloadExport, importFromFile } from '$lib/dataIO';
 
     const userData = $derived($userDataStore);
     const events = $derived($lifeEventsStore ?? []);
@@ -97,6 +100,37 @@
     }
 
     function closeDialog() { dialogOpen = false; }
+
+    let fileInput: HTMLInputElement | null = $state(null);
+    let importStatus = $state<{ ok: true; eventsImported: number; userDataImported: boolean } | null>(null);
+    let importError = $state<string | null>(null);
+
+    function handleExport() {
+        downloadExport();
+    }
+
+    function handleImportClick() {
+        fileInput?.click();
+    }
+
+    async function handleImport(e: Event) {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (!file) return;
+        const result = await importFromFile(file);
+        if (result.ok) {
+            importStatus = result;
+            importError = null;
+        } else {
+            importError = result.error;
+            importStatus = null;
+        }
+        target.value = '';
+        setTimeout(() => {
+            importStatus = null;
+            importError = null;
+        }, 4000);
+    }
 
     // ===== Hover preview ==========================================
     let hoverWeek = $state<number | null>(null);
@@ -365,34 +399,67 @@
 
                 <div class="mt-16 flex items-center justify-between">
                     <div class="ornament" aria-hidden="true">❦</div>
-                    <AlertDialog>
-                        <AlertDialogTrigger
-                            class="text-xs text-muted-foreground/70 hover:text-destructive underline-offset-4 hover:underline transition-colors"
+                    <div class="flex items-center gap-4">
+                        <button
+                            type="button"
+                            onclick={handleExport}
+                            class="text-xs text-muted-foreground/70 hover:text-foreground underline-offset-4 hover:underline transition-colors inline-flex items-center gap-1.5"
                         >
-                            Reset everything
-                        </AlertDialogTrigger>
-                        <AlertDialogContent class="w-[95vw] max-w-md mx-2 sm:mx-auto bg-card border-border">
-                            <AlertDialogHeader>
-                                <AlertDialogTitle class="font-serif text-2xl">
-                                    Begin again?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription class="prose-body text-sm">
-                                    This will erase your birthday, lifespan, and every event you've recorded.
-                                    The grid will be blank, like a new notebook. There is no undo.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter class="gap-2 sm:gap-3">
-                                <AlertDialogCancel class="rounded-full">Keep it</AlertDialogCancel>
-                                <AlertDialogAction
-                                    class="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full"
-                                    onclick={handleReset}
-                                >
-                                    Erase everything
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+                            <DownloadIcon class="h-3 w-3" />
+                            Export
+                        </button>
+                        <button
+                            type="button"
+                            onclick={handleImportClick}
+                            class="text-xs text-muted-foreground/70 hover:text-foreground underline-offset-4 hover:underline transition-colors inline-flex items-center gap-1.5"
+                        >
+                            <UploadIcon class="h-3 w-3" />
+                            Import
+                        </button>
+                        <input
+                            bind:this={fileInput}
+                            type="file"
+                            accept=".json"
+                            class="hidden"
+                            onchange={handleImport}
+                        />
+                        <AlertDialog>
+                            <AlertDialogTrigger
+                                class="text-xs text-muted-foreground/70 hover:text-destructive underline-offset-4 hover:underline transition-colors"
+                            >
+                                Reset
+                            </AlertDialogTrigger>
+                            <AlertDialogContent class="w-[95vw] max-w-md mx-2 sm:mx-auto bg-card border-border">
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle class="font-serif text-2xl">
+                                        Begin again?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription class="prose-body text-sm">
+                                        This will erase your birthday, lifespan, and every event you've recorded.
+                                        The grid will be blank, like a new notebook. There is no undo.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter class="gap-2 sm:gap-3">
+                                    <AlertDialogCancel class="rounded-full">Keep it</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        class="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-full"
+                                        onclick={handleReset}
+                                    >
+                                        Erase everything
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
                 </div>
+
+                {#if importStatus}
+                    <p class="mt-3 text-xs text-muted-foreground italic-display tabular rise">
+                        Imported {importStatus.eventsImported} event{importStatus.eventsImported !== 1 ? 's' : ''}{importStatus.userDataImported ? ' and settings' : ''}.
+                    </p>
+                {:else if importError}
+                    <p class="mt-3 text-xs text-destructive rise">{importError}</p>
+                {/if}
             </section>
 
             <aside class="hidden lg:block lg:col-span-4 lg:col-start-9 rise rise-delay-3">
